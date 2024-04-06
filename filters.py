@@ -1,3 +1,4 @@
+import math
 import numpy as np
 
 def split(image):
@@ -5,16 +6,15 @@ def split(image):
     return [image[i].transpose() for i in range(3)]
 
 def apply_matrix(image, matrix):
+    n = np.size(matrix, axis=0)
     image = image.astype(np.int32)
-    matrix = np.array(matrix).reshape(9, 1)
-    layers = [np.pad(l, 1, 'edge') for l in split(image)]
-    for i in range(0, image.shape[0]):
+    matrix = np.array(matrix).reshape(n*n, 1)
+    layers = [np.pad(l, n // 2, 'edge') for l in split(image)]
+    for i in range(image.shape[0]):
         new = None
         for l in layers:
-            row = l[i:i+3]
-            strips = np.concatenate((row[...,0:image.shape[1]],
-                                    row[...,1:image.shape[1]+1],
-                                    row[...,2:image.shape[1]+2]), axis=0)
+            row = l[i:i+n]
+            strips = np.concatenate([row[...,j:image.shape[1]+j] for j in range(n)], axis=0)
             new_l = np.sum(strips * matrix, axis=0)
             new_l = np.select([new_l > 255, new_l < 0], [255, 0], new_l)
             new_l = np.expand_dims(new_l, 1)
@@ -54,5 +54,18 @@ def edge_detection(image, threshold=70):
     )
     return np.select([image > threshold], [255], 0)
 
-def gaussian_blur(image, sigma):
-    pass
+def gaussian_blur(image, sigma=100):  # *= 100%
+    sigma /= 100
+    n = math.ceil(6*sigma)
+    if n % 2 == 0:
+        n += 1
+    r = n // 2
+
+    coeff_mtx = np.array([])
+    for x in range(-r, r+1):
+        for y in range(-r, r+1):
+            coeff_mtx = np.append(coeff_mtx, x**2+y**2)
+    coeff_mtx = np.exp(-coeff_mtx/(2*sigma**2)) / (2*math.pi*sigma**2)
+    coeff_mtx = coeff_mtx.reshape(n, n)
+
+    return apply_matrix(image, coeff_mtx)
