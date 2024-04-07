@@ -1,5 +1,6 @@
 import math
 import numpy as np
+from tqdm.auto import tqdm
 
 def split(image):
     image = np.swapaxes(image, 2, 0)
@@ -10,7 +11,7 @@ def apply_matrix(image, matrix):
     image = image.astype(np.int32)
     matrix = np.array(matrix).reshape(n*n, 1)
     layers = [np.pad(l, n // 2, 'edge') for l in split(image)]
-    for i in range(image.shape[0]):
+    for i in tqdm(range(image.shape[0]), ncols=100):
         new = None
         for l in layers:
             row = l[i:i+n]
@@ -54,8 +55,7 @@ def edge_detection(image, threshold=70):
     )
     return np.select([image > threshold], [255], 0)
 
-def gaussian_blur(image, sigma=100):  # *= 100%
-    sigma /= 100
+def gaussian_blur(image, sigma=1):
     n = math.ceil(6*sigma)
     if n % 2 == 0:
         n += 1
@@ -69,3 +69,17 @@ def gaussian_blur(image, sigma=100):  # *= 100%
     coeff_mtx = coeff_mtx.reshape(n, n)
 
     return apply_matrix(image, coeff_mtx)
+
+def crystallize(image, cnt=200):
+    pts = np.array([np.random.randint(0, image.shape[0], cnt),
+                np.random.randint(0, image.shape[1], cnt)]).transpose()
+    cj = {(pts[i,0], pts[i,1]): image[pts[i,0], pts[i,1]] for i in range(cnt)}
+
+    for i in tqdm(range(image.shape[0]), ncols=100):
+        for j in range(image.shape[1]):
+            dists = np.expand_dims(np.power(pts[:,0]-i,2)+np.power(pts[:,1]-j,2), 1)
+            wd = np.concatenate((pts, dists), axis=1)
+            wd = wd[wd[:,2].argsort(kind='stable')]
+            image[i, j] = cj[(wd[0,0], wd[0,1])]
+    
+    return image
